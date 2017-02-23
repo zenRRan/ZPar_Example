@@ -1,0 +1,154 @@
+
+Zpar  
+	一个常用的开源的词法句法解析器
+	感知机->更新参数 柱搜索->解码
+
+A.Linux常用命令
+	wc  -l  <filename> // 显示行数
+	
+	cat    //显示内容
+	vim/vi  <filename>//创建、编辑文件
+	
+	//more,less 文本浏览
+	more   <filename>
+	less   <filename> 
+	
+	//显示文本头几行或尾几行
+	head  -n <number> <filename>
+	tail  -n <number> <filename>
+          -f <filename>  //实时查看文本更新	
+	
+	file 
+	
+	grep -I  "要查找的内容" <filename> //显示存在行内容
+	
+	nohup <执行命令>  2>&1 &   //2>&1，错误重定向到标准输出。
+	
+	chmod +x
+	
+	top/htop //是Linux系统中的一个互动的进程查看器，一个文本模式的应用程序。top比较古老但简约明了，htop更加人性化，功能丰富   
+	
+	dos2unix
+	
+	>   //如果文件不存在，将创建新的文件，并将数据送至此文件；如果文件存在，先将文件清空，然后将数据填入此文件
+	>>  //如果文件不存在，将创建新的文件，并将数据送至此文件；如果文件存在，则将数据添加在文件后面
+	
+	pkill -u <username>
+	
+	ctrl+c  //停止
+	
+B.ZPar使用
+	语料类型：train dev test    train训练model  根据model解码dev  选取正确率最高对应的model  作为最终的model，用test测试
+	
+	eg:
+		english dependency
+	1.格式 .dep
+		The     DT      1       det
+		agency  NN      4       nsubj
+		has     VBZ     4       aux
+		already RB      4       advmod  
+		spent   VBN     -1      root
+		roughly RB      6       quantmod
+		$       $       4       dobj
+		19      CD      6       number
+		billion CD      6       number
+		selling VBG     4       xcomp
+		34      CD      12      num
+		insolvent       JJ      12      amod
+		S&Ls    NNS     9       dobj
+		,       ,       4       punct
+		and     CC      4       cc
+		it      PRP     17      nsubj
+		is      VBZ     17      cop
+		likely  JJ      4       conj
+		to      TO      19      aux
+		sell    VB      17      xcomp
+		or      CC      19      cc
+		merge   VB      19      conj
+		600     CD      19      dobj
+		by      IN      19      prep
+		the     DT      25      det
+		time    NN      23      pobj
+		the     DT      27      det
+		bailout NN      28      nsubj
+		concludes       VBZ     25      rcmod
+		.       .       4       punct
+		
+		a. <word>	<tag>	<father's index>	<relation>
+		b. 第一个单词index从"0"开始，root是"-1"
+		
+		解码文本格式：
+		This_DT time_NN around_RP ,_, they_PRP 're_VBP moving_VBG even_RB faster_RBR ._.
+		测评文件格式：
+		This	DT	1	det
+		time	NN	6	tmod
+		,	,	6	punct
+		the	DT	4	det
+		firms	NNS	6	nsubj
+		were	VBD	6	cop
+		ready	JJ	-1	root
+		.	.	6	punct
+	2.	确保没有交叉映射
+	3.	根据relation在ZPar-Meishan-master\src\english\dependency\label目录中选择label覆盖全的.h头文件，缺少relation则按顺序补上  比如缺少	discourse
+		则添加XXX_DEP_STRINGS在末尾XXX_DEP_STRINGS[] = {...	discourse},XXX_DEP_LABELS = {...	XXX_DEP_DISCOURSE,XXX_DEP_COUNT}//",XXX_DEP_COUNT"本来存在，计数用
+		在之前添加。选好.h头文件后，把ZPar-Meishan-master\src\english\dep.h	中 #include "dependency/label/XXX.h"	#include "dependency/rules/XXX.h"	XXX.h的地方
+		为你选择的那个.h文件
+	4.	make english.depparser	//编译  Makefile 一个编译脚本   会在ZPar-Meishan-master\dist\里生成english.depparser，此目录下包括train(训练的可执行C++文件)，depparser(根据模型解析的C++可执行文件)，
+		unit_test(测试，一般用不到)
+	
+	scripts
+		conll2dep.py  dep2conll.py  depio.py  eval.pl
+		
+	运行脚本shell批处理文件eng.sh：
+	zpar=./dist/english.depparser
+	data=./data_eng
+	result=./results_eng
+	script=./scripts
+	
+	if [ -d $result ]; then
+		rm -rf $result
+	fi
+	mkdir $result
+
+	for i in `seq 1 50`;
+	do
+		echo "Begin iteration $i training ..."
+		$zpar/train $data/train.dep $result/model 1
+		$zpar/depparser $data/dev.tagged $result/dev_parsed.dep.$i $result/model
+		python scripts/dep2conll.py $result/dev_parsed.dep.$i > $result/dev_parsed.conll.$i
+		perl scripts/eval.pl -g $data/dev.conll -s $result/dev_parsed.conll.$i -o $result/dev_score.$i
+		cp $result/model $result/model.$i
+	done
+
+	总结我期间遇到的种种问题：
+		语料提取问题
+		语料格式问题
+		windows转linux问题
+		label问题
+		脚本细节问题(迭代一个几个小时，迭代一个如果没有问题就是基本没有问题。否则，改完重来)
+		实时查看log
+		实时查看top/htop
+		
+	ps:
+		conll格式
+		1	Rolls-Royce	_	NNP	NNP	_	4	nn	_	_
+		2	Motor	_	NNP	NNP	_	4	nn	_	_
+		3	Cars	_	NNPS	NNPS	_	4	nn	_	_
+		4	Inc.	_	NNP	NNP	_	5	nsubj	_	_
+		5	said	_	VBD	VBD	_	0	root	_	_
+		6	it	_	PRP	PRP	_	7	nsubj	_	_
+		7	expects	_	VBZ	VBZ	_	5	ccomp	_	_
+		8	its	_	PRP$	PRP$	_	10	poss	_	_
+		9	U.S.	_	NNP	NNP	_	10	nn	_	_
+		10	sales	_	NNS	NNS	_	13	nsubj	_	_
+		11	to	_	TO	TO	_	13	aux	_	_
+		12	remain	_	VB	VB	_	13	cop	_	_
+		13	steady	_	JJ	JJ	_	7	xcomp	_	_
+		14	at	_	IN	IN	_	13	prep	_	_
+		15	about	_	IN	IN	_	16	quantmod	_	_
+		16	1,200	_	CD	CD	_	17	num	_	_
+		17	cars	_	NNS	NNS	_	14	pobj	_	_
+		18	in	_	IN	IN	_	13	prep	_	_
+		19	1990	_	CD	CD	_	18	pobj	_	_
+		20	.	_	.	.	_	5	punct	_	_
+
